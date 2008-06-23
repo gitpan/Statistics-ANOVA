@@ -10,7 +10,7 @@ use Math::Cephes qw(:dists);
 
 use vars qw($VERSION);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 #-----------------------------------------------------------------------
 sub new {
@@ -365,43 +365,6 @@ sub levene_test {
 }
 
 #-----------------------------------------------------------------------        
-sub fmax_test {
-#-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-return;
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for assessing equality of variance';
-        
-    my (@n, @v) = ();       
-
-    # Traverse each sample of data:
-    while(my($sample_name, $sample_data) = each %data){
-        push @v, $sample_data->variance;
-        push @n, $sample_data->count;
-    }
-        
-    my $vars = Statistics::Descriptive::Sparse->new();
-    $vars->add_data(@v);
-        
-    my $f = ($vars->max / $vars->min);
-        
-    my $df_t = ($n[$vars->maxdex] - 1);
-    my $df_e = ($n[$vars->mindex] - 1);
-        
-    my $f_prob = fdtrc($df_t, $df_e, $f);
-    #my $fprob = Statistics::Distributions::fprob($df_t, $df_e, $f);
-    
-    $self->{$_} = '' foreach qw/ss_t ss_e ms_t ms_e/;
-    
-    $self->{'f_value'} = $f;
-    $self->{'p_value'} = $f_prob;
-    $self->{'df_t'} = $df_t;
-    $self->{'df_e'} = $df_e;
-    
-    return $self;
-    #$self->{'title'} = 'F-max test for equality of variances:';
-}
-
-#-----------------------------------------------------------------------        
 sub comparisons_indep {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
@@ -524,25 +487,31 @@ Statistics::ANOVA - Perform oneway analyses of variance
 =head1 SYNOPSIS
 
  use Statistics::ANOVA;
-
  my $varo = Statistics::ANOVA->new();
 
-my @data1 = (qw/50	54	55	68	66	76	75	63	62	61	75	63	62	77	68/);
-my @data2 = (qw/72	75	65	60	69	64	56	57	55	63	54	63	51	72	78/);
-my @data3 = (qw/60	60	70	72	64	79	73	75	72	77	67	83	60	77	70/);
-my @data4 = (qw/68	65	76	74	75	83	82	76	85	75	63	64	77	62	83/);
+ # Some data:
+ my @gp1 = (qw/8 7 11 14 9/);
+ my @gp2 = (qw/11 9 8 11 13/);
+ my @gp3 = (qw/7 13 12 8 10/);
 
- $varo->load({dat1 => \@data1, dat2 => \@data2, dat3 => \@data3});
+ # Load the data, names can be arbitrary
+ $varo->load_data({gp1 => \@gp1, gp2 => \@gp2, gp3 => \@gp3});
 
- $varo->obrien_test()->dump();
- $varo->levene_test()->dump();
- $varo->fmax_test()->dump();
+ # If they are independent groups data, test equality of variances, difference between them, and means:
+ $varo->obrien_test()->dump(title => 'O\'Brien\'s test of equality of variances');
+ $varo->levene_test()->dump(title => 'Levene\'s test of equality of variances');
  $varo->anova_indep()->dump(eta_squared => 1, omega_squared => 1, title => 'Independent groups ANOVA');
  $varo->comparisons_indep();
 
+ # or if they are repeated measures data:
+ $varo->anova_dep()->dump(title => 'Dependent groups ANOVA');
+ $varo->comparisons_dep();
+ # or:
+ $varo->anova_friedman()->dump(title => 'Friedman test');
+
 =head1 DESCRIPTION
 
-Performs oneway between groups and repeated measures ANOVAs, with estimates of proportion of variance acounted for (eta-squared) and effect-size (omega-squared), plus  pairwise comparisons by the relevant t-tests. Also performs equality of variances tests (O'Brien's, Levene's, F-max).
+Performs oneway between groups and repeated measures ANOVAs, with estimates of proportion of variance acounted for (eta-squared) and effect-size (omega-squared), plus  pairwise comparisons by the relevant t-tests. Also performs equality of variances tests (O'Brien's, Levene's).
 
 =head1 METHODS
 
@@ -579,8 +548,8 @@ Empties all cached data and calculations upon them, ensuring these will not be u
 An implementation of a one-way between-groups analysis of variance. Feeds the class object C<$varo> as follows:
 
  $varo->{'f_value'}
- $varo->{'df_t'} : the "treatment" or numerator or between-groups degree(s) of freedom
- $varo->{'df_e'} : the "error" or denominator or within-groups degree(s) of freedom
+ $varo->{'df_t'} : the treatment or numerator or between-groups degree(s) of freedom
+ $varo->{'df_e'} : the error or denominator or within-groups degree(s) of freedom
  $varo->{'p_value'} : associated with the F-value with the above dfs
  $varo->{'ss_t'} : treatment sums of squares
  $varo->{'ss_e'} : error sums of squares
@@ -601,7 +570,7 @@ Performs a one-way repeated measures analysis of variance (sphericity assumed). 
 
 Alias: friedman_test
 
-Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the asociated p-value (area under the right-side, upper tail). There is now no defined 'f_value'. See some other module for performing nonparametric pairwise comparisons.
+Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the associated p-value (area under the right-side, upper tail). There is now no defined 'f_value'. See some other module for performing nonparametric pairwise comparisons.
 
 =head2 obrien_test
 
@@ -610,12 +579,6 @@ Performs O'Brien's Test for equality of variances. The statistical attributes no
 =head2 levene_test
 
 Performs Levene's (1960) Test for equality of variances. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Levene's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Levene's Test.
-
-=head2 fmax_test
-
-I<Presently unimplemented; returns nothing>
-
-Performs the standard F-max test for equality of variances. All statistical attributes now within the class object, $varo, pertain to this test: 'f_value', 'p_value', 'df_t' and 'df_e'.
 
 =head2 comparisons_indep
 
@@ -673,7 +636,7 @@ Print only of t-test results.
 
 =over 4
 
-=item v 0.01
+=item v 0.02
 
 June 2008
 
