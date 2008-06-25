@@ -4,3 +4,4 @@ MANIFEST
 README
 t/Statistics-ANOVA.t
 lib/Statistics/ANOVA.pm
+ex/ANOVA.pl

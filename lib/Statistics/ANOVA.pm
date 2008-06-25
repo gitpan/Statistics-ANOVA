@@ -10,31 +10,31 @@ use Math::Cephes qw(:dists);
 
 use vars qw($VERSION);
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 #-----------------------------------------------------------------------
 sub new {
 #-----------------------------------------------------------------------
-                
-        my $proto = shift;
-        my $class = ref($proto) || $proto;
-    
-        my $self= {};
-        
-        foreach (qw/dump/) {
-                $self->{$_} = 0;
-        }
-        ##$self->{$_} = '' foreach qw/df_t df_e f_value chi_value p_value ss_t ss_e title/;
-        bless($self, $class);
-        return $self;
+    my $proto = shift;
+    my $class = ref($proto) || $proto;
+    my $self= {};
+    ##$self->{$_} = '' foreach qw/df_t df_e f_value chi_value p_value ss_t ss_e title/;
+    bless($self, $class);
+    return $self;
 }
 
 #-----------------------------------------------------------------------
 sub load {
 #-----------------------------------------------------------------------        
     my $self = shift;
-    
     $self->unload();
+    $self->add(@_);
+}
+
+#-----------------------------------------------------------------------
+sub add {
+#-----------------------------------------------------------------------        
+    my $self = shift;
     
     if (ref $_[0] eq 'HASH') {
       while (my ($sample_name, $sample_data) = each %{$_[0]}) {
@@ -69,7 +69,7 @@ sub anova_indep {
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
-        carp 'No groups in the data for performing ANOVA';
+        carp 'No or not enough groups in the data for performing ANOVA';
         return; 
     }
         
@@ -118,7 +118,7 @@ sub anova_indep {
 	$self->{'ss_e'} = $ss_e;
     $self->{'ms_t'} = $ms_t;
 	$self->{'ms_e'} = $ms_e;
-        
+    $self->{'nparam'} = 0;
     return $self;
 
 }
@@ -197,7 +197,7 @@ sub anova_dep {
 	$self->{'ss_e'} = $ss_e;
     $self->{'ms_t'} = $ms_t;
     $self->{'ms_e'} = $ms_e;
- 
+    $self->{'nparam'} = 0;
     return $self;
 }
 
@@ -242,6 +242,7 @@ sub anova_friedman {
     $self->{'chi_value'} = $chi;
     $self->{'p_value'} = $chi_prob;
     $self->{'df_t'} = $k;
+    $self->{'nparam'} = 1;
     return $self;
 }
 
@@ -426,7 +427,7 @@ sub string {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
     my $str;
-    if (defined $self->{'f_value'}) {
+    if (defined $self->{'f_value'} && !$self->{'nparam'}) {
         $str = "F($self->{'df_t'}, $self->{'df_e'}) = $self->{'f_value'}, p = $self->{'p_value'},";
         $str .= ' MSe = ' . $self->{'ms_e'} . ',' if $args{'mse'};
         $str .= ' eta-squared = ' . $self->eta_squared() . ',' if $args{'eta_squared'};
@@ -473,6 +474,7 @@ sub _check_counts {
 
 # Aliases:
 *load_data = \&load;
+*add_data = \&add;
 *anova_rm = \&anova_dep;
 *friedman_test = \&anova_friedman;
 
@@ -494,16 +496,18 @@ Statistics::ANOVA - Perform oneway analyses of variance
  my @gp2 = (qw/11 9 8 11 13/);
  my @gp3 = (qw/7 13 12 8 10/);
 
- # Load the data, names can be arbitrary
- $varo->load_data({gp1 => \@gp1, gp2 => \@gp2, gp3 => \@gp3});
+ # Load the data (names can be arbitrary):
+ $varo->load_data({gp1 => \@gp1, gp2 => \@gp2});
+ # Oh, forgot one:
+ $varo->add_data(gp3 => \@gp3);
 
- # If they are independent groups data, test equality of variances, difference between them, and means:
+ # If they are independent data, test equality of variances, difference between them, and means:
  $varo->obrien_test()->dump(title => 'O\'Brien\'s test of equality of variances');
  $varo->levene_test()->dump(title => 'Levene\'s test of equality of variances');
- $varo->anova_indep()->dump(eta_squared => 1, omega_squared => 1, title => 'Independent groups ANOVA');
+ $varo->anova_indep()->dump(title => 'Independent groups ANOVA', eta_squared => 1, omega_squared => 1);
  $varo->comparisons_indep();
 
- # or if they are repeated measures data:
+ # or if they are repeated measures:
  $varo->anova_dep()->dump(title => 'Dependent groups ANOVA');
  $varo->comparisons_dep();
  # or:
@@ -523,23 +527,31 @@ Create a new Statistics::ANOVA object
 
 =head2 load
 
- $varo->load('data1', @data1)
- $varo->load('data1', \@data1)
- $varo->load({'data1' => \@data1, 'data2' => \@data2})
+ $varo->load('aname', @data1)
+ $varo->load('aname', \@data1)
+ $varo->load({'aname' => \@data1, 'another_name' => \@data2})
 
-Alias: C<load_data>
+I<Alias>: C<load_data>
 
-Provided for comparability with other Perl Statistics modules - but you can just send the data you want to test with the call to C<anova_indep> or C<anova_dep> if you like. 
-
-Accepts a single C<name value =E<gt> pair> of a sample name, and a list (referenced or not) of data; or a hash reference of named array references of data. The data are loaded into the class object by name, within a hash called C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you could get at the data again, for instance, by going $varo->{'data'}->{'data1'}->get_data(). You can keep updating the data this way, without unloading earlier loads.
+Accepts either (1) a single C<name =E<gt> value> pair of a sample name, and a list (referenced or not) of data; or (2) a hash reference of named array references of data. The data are loaded into the class object by name, within a hash called C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you could get at the data again, for instance, by going $varo->{'data'}->{'data1'}->get_data(). You can keep updating the data this way, without unloading earlier loads. The names of the data can be arbitrary.
 
 Returns the Statistics::ANOVA object.
+
+=head2 add
+
+ $varo->add('another_name', @data2)
+ $varo->add('another_name', \@data2)
+ $varo->add({'another_name' => \@data2})
+
+I<Alias>: C<add_data>
+
+Same as L<load|load> except that any previous loads are not L<unload|unload>ed.
 
 =head2 unload
 
  $varo->unload();
 
-Empties all cached data and calculations upon them, ensuring these will not be used for testing. This will not be automatically called with each new load or test. So it should be used whenever switching from one dataset to another. Alternatively, if you send a hash of data directly to C<anova_indep> or C<anova_dep>, that's what will be tested; i.e., you don't have to specifically load and unload the data.
+Empties all cached data and calculations upon them, ensuring these will not be used for testing. This will be automatically called with each new load, but, to take care of any development, it could be good practice to call it yourself whenever switching from one dataset for testing to another.
 
 =head2 anova_indep
 
@@ -560,25 +572,25 @@ An implementation of a one-way between-groups analysis of variance. Feeds the cl
 
  $varo->anova_dep()
 
-Alias: anova_rm
+I<Alias>: anova_rm
 
-Performs a one-way repeated measures analysis of variance (sphericity assumed). See C<anova_indep> for fed values.
+Performs a one-way repeated measures analysis of variance (sphericity assumed). See L<anova_indep|anova_indep> for fed values.
 
 =head2 anova_friedman
 
  $varo->anova_friedman()
 
-Alias: friedman_test
+I<Alias>: friedman_test
 
-Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the associated p-value (area under the right-side, upper tail). There is now no defined 'f_value'. See some other module for performing nonparametric pairwise comparisons.
+Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the associated p-value (area under the right-side, upper tail). There is now no defined 'f_value'. See some other module for performing nonparametric pairwise comparisons.
 
 =head2 obrien_test
 
-Performs O'Brien's Test for equality of variances. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Obrien's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Obrien's Test.
+Performs O'Brien's Test for equality of variances. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for O'Brien's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for O'Brien's Test.
 
 =head2 levene_test
 
-Performs Levene's (1960) Test for equality of variances. The statistical attributes now within the class object (see C<anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Levene's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Levene's Test.
+Performs Levene's (1960) Test for equality of variances. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Levene's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Levene's Test.
 
 =head2 comparisons_indep
 
@@ -610,7 +622,7 @@ Returns a statement of result, in the form of C<F(df_t, df_e) = f_value, p = p_v
 
  $varo->dump(mse => 1, eta_squared => 1, omega_squared => 1, title => 'ANOVA test')
 
-Prints the string returned by C<string>. Optionally also get MSe, eta_squared and omega_squared values appended to the string. A newline - "\n" - is appended at the end of the C<print>. Above this string, a title can also be printed, by giving a value to the optional C<title> attribute.
+Prints the string returned by L<string|string>. Optionally also get MSe, eta_squared and omega_squared values appended to the string. A newline - "\n" - is appended at the end of the print. Above this string, a title can also be printed, by giving a value to the optional C<title> attribute.
 
 =head1 EXPORT
 
@@ -636,11 +648,11 @@ Print only of t-test results.
 
 =over 4
 
-=item v 0.02
+=item v 0.03
 
-June 2008
+June 2008: Initital release via PAUSE. 
 
-Initital release via PAUSE.
+See CHANGES in installation distribution for subsequent updates.
 
 =back
 

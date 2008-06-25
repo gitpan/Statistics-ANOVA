@@ -3,5 +3,10 @@ Revision history for Perl extension Statistics::ANOVA.
 0.01  Tue Jun 27 02:19:29 2006
 	- original version; created by h2xs 1.23 with options
 		-AX --skip-exporter --use-new-tests -n Statistics::ANOVA
+    - uploaded via PAUSE June 2008
 
-0.02 2008/06/23: -cleanup POD and dist; remove bung sub fmax
+0.02/0.03 2008/06/25: 
+    -added sub "add_data" for non-deleting loads; all calls to load unload
+    -nonparam flag for ensuring Friedman test appropriately "dump"-ed
+    -cleanup POD and dist, with example file
+    -remove bung sub fmax
