@@ -3,14 +3,14 @@ package Statistics::ANOVA;
 use 5.008008;
 use strict;
 use warnings;
-use Carp qw/carp croak/;
+use Carp qw/croak/;
 use Statistics::Descriptive;
 use Algorithm::Combinatorics qw(combinations);
 use Math::Cephes qw(:dists);
 
 use vars qw($VERSION);
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 #-----------------------------------------------------------------------
 sub new {
@@ -63,14 +63,12 @@ sub unload {
 #-----------------------------------------------------------------------        
 sub anova_indep {
 #-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my ($self, %args) = @_;
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
-        carp 'No or not enough groups in the data for performing ANOVA';
-        return; 
+        croak 'Not enough groups, if any, in the data for performing ANOVA';
     }
         
     my ($ss_t, $df_e, $ss_e, $means, @s, @dat, $mean, $count) = ();
@@ -94,7 +92,7 @@ sub anova_indep {
         push @s, [$count, $mean]; # store for calculating between SS
     }
     ##croak 'No within-groups for performing ANOVA' if ! $ss_e;
-    if (!$ss_e || !$df_e) { carp 'No within-groups for performing ANOVA'; return;}
+    if (!$ss_e || !$df_e) { croak 'No within-groups for performing ANOVA'; }
     # Calc. between groups SS:
     # 1st need the grand mean:
     my $grand_mean = $means / $k;
@@ -126,13 +124,12 @@ sub anova_indep {
 #-----------------------------------------------------------------------        
 sub anova_dep {
 #-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my ($self, %args) = @_;
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
-        carp 'No groups in the data for performing ANOVA';
+        croak 'Not enough groups, if any, in the data for performing ANOVA';
         return; 
     }
 
@@ -179,10 +176,11 @@ sub anova_dep {
             $ss_e += ($o - $p_means[$i] - $j_means{$_} + $grand_mean)**2;
         }
     }
+
     my $df_e = $df_t * $df_b;
     my $ms_e = $ss_e / $df_e;
     
-    my $f = $ms_t / $ms_e;
+    my $f = $ms_t / $ms_e;    
     my $f_prob = fdtrc($df_t, $df_e, $f);
     ##my $f_prob = Statistics::Distributions::fprob($df_t, $df_e, $f);
     
@@ -204,78 +202,84 @@ sub anova_dep {
 #-----------------------------------------------------------------------        
 sub anova_friedman {
 #-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my ($self, %args) = @_;
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
-        carp 'No groups in the data for performing ANOVA';
-        return; 
+        croak 'Not enough groups, if any, in the data for performing ANOVA';
     }
     
     # Check counts - should be equal:
     my $count = _check_counts(\%data);
-        
+  
     # Get column sum of ranks of row values:
-    my ($i, $j, $col, @row_sorted, %ranks, %row_values) = ();
+    my ($i, $col, %ranks, %row_values) = ();
+    my ($old, $cur) = (0, 0);
+
+    # Set the averaged ranks.
+    my @ranks;
+    # - go down each index:
     for ($i = 0; $i < $count; $i++) {
-        foreach (keys %data) {
-            push @{ $row_values{ ($data{$_}->get_data)[$i] } }, $_;
-        }
-        @row_sorted = sort {$a <=> $b} keys %row_values;
-        for ($j = 0; $j < scalar @row_sorted; $j++) {
-            foreach $col( @{$row_values{ $row_sorted[$j]} } ) {
-                $ranks{$col} += $j + 1;
+        # - list the values at this index in each data-array (being Statistics-Descriptive objects):
+        # - a value might occur in more than one group at this index, so store an array of the groups:
+        push @{ $row_values{ ($data{$_}->get_data)[$i] } }, $_ foreach keys %data;
+        # This loop adapted from Gene Boggs' "rank" function in Statistics-RankCorrelation:
+        for my $x (sort { $a <=> $b } keys %row_values) {
+            # Get the number of ties.
+            my $ties = scalar(@{ $row_values{$x} });
+            $cur += $ties;
+            if ($ties > 1) {
+                # Average the tied data.
+                my $average = $old + ($ties + 1) / 2;
+                $ranks{$_} += $average for @{ $row_values{$x} };
             }
+            else {
+                # Add the single rank to the list of ranks.
+                $ranks{ $row_values{$x}[0] } += $cur;
+            }
+            $old = $cur;
         }
+
+        ($old, $cur) = (0, 0);
         %row_values = ();
     }
+    
     my $sum_squared_ranks;
     foreach (keys %ranks) {
         $sum_squared_ranks += $ranks{$_}**2;
     }
-    my $chi = ( ( 12 / ($count * $k * ($k + 1) ) ) * $sum_squared_ranks ) - ( 3 * $count * ($k + 1) );
+    # x=[12/(N k (k+1))]Sum(1 ... k)(Rj^2) - 3 N (k+1) where Rj is the sum of ranks for j (j=1 ... k)
+    my $chi = ( 12 / ($count * $k * ($k + 1) ) ) * $sum_squared_ranks - 3 * $count * ($k + 1) ;
     my $df = $k - 1;
-    my $chi_prob = chdtrc($df, $chi);
-    ##use Statistics::Distributions;
-    ##my $chi_prob = Statistics::Distributions::chisqrprob ($df, $chi);
-    $self->{'chi_value'} = $chi;
-    $self->{'p_value'} = $chi_prob;
-    $self->{'df_t'} = $k;
-    $self->{'nparam'} = 1;
+    if ($args{'f_equiv'}) {
+        my $f = (($count - 1) * $chi) / ($count * ($k - 1) - $chi);
+        my $df_t = $k - 1;
+        my $df_e = ($count - 1) * ($df_t);
+        my $f_prob = fdtrc($df_t, $df_e, $f);
+        $self->{'f_value'} = $f;
+        $self->{'p_value'} = $f_prob;
+        $self->{'df_t'} = $df_t;
+        $self->{'df_e'} = $df_e;
+        $self->{'nparam'} = 0;
+    }
+    else {
+        my $chi_prob = chdtrc($df, $chi);
+        ##use Statistics::Distributions;
+        ##my $chi_prob = Statistics::Distributions::chisqrprob ($df, $chi);
+        $self->{'chi_value'} = $chi;
+        $self->{'p_value'} = $chi_prob;
+        $self->{'df_t'} = $k;
+        $self->{'nparam'} = 1;
+    }
     return $self;
-}
-
-#-----------------------------------------------------------------------        
-sub eta_squared {
-#-----------------------------------------------------------------------        
-    my ($self) = @_;
-    croak 'Need to run ANOVA to obtain requested statistic' if !defined $self->{'df_t'} || !defined $self->{'f_value'};
-    $self->{'eta_sq'} = ( $self->{'df_t'} * $self->{'f_value'} ) / ($self->{'df_t'} * $self->{'f_value'} + $self->{'df_e'} );
-    ##$ss_t / ( $ss_t / $ss_e );
-    return $self->{'eta_sq'};
-}
-
-#-----------------------------------------------------------------------        
-sub omega_squared {
-#-----------------------------------------------------------------------        
-    my ($self) = @_;
-    my $eta = $self->eta_squared();
-    my $a = $eta * ($self->{'df_t'} + $self->{'df_e'}) - $self->{'df_t'};
-    my $n;
-    foreach (keys %{$self->{'data'}}) {
-        $n += $self->{'data'}->{$_}->count;
-    } 
-    $self->{'omega_sq'} =  $a / ( $a + $n * ( 1 - $eta ) ); 
-    return $self->{'omega_sq'};
 }
 
 #-----------------------------------------------------------------------        
 sub obrien_test {
 #-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for assessing equality of variance';
+    my ($self, %args) = @_;
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
         
     my ($m, $v, $n, @r) = ();       
     $self->{'obrien'} = {};
@@ -317,14 +321,12 @@ sub obrien_test {
 
             # Check that each group mean of the O'Briens are equal to the variance of the original data:
             if (sprintf('%.2f', $self->{'obrien'}->{$sample_name}->mean) != sprintf('%.2f', $v)) {
-                croak "mean for sample $sample_name does not equal variance";
+                croak "Mean for sample $sample_name does not equal variance";
             }
         }
-        
-    ##$self->{'title'} = 'O\'Brien\'s Test for equality of variances:';
-    #if ($self->{'p_value'} < .05) {print "Unequal variances by Obrien Test\n"; $self->{'equal_variances'} = 0; } else {$self->{'equal_variances'} = 1;}
+
     # Perform an ANOVA using the O'Briens as the DV:
-    $self->anova_indep($self->{'obrien'});
+    $self->anova_indep(data => $self->{'obrien'});
     
     return $self;
 }
@@ -332,10 +334,9 @@ sub obrien_test {
 #-----------------------------------------------------------------------        
 sub levene_test {
 #-----------------------------------------------------------------------        
-    my ($self, $data) = @_;
-
-    my %data = ref $data eq 'HASH' ? %{$data} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for assessing equality of variance';
-        
+    my ($self, %args) = @_;
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+       
     my ($m, $v, $n, @d) = ();       
     $self->{'levene'} = {};
     
@@ -356,13 +357,34 @@ sub levene_test {
         @d = ();
     }
 
-    #$self->{'title'} = 'Levene\'s Test for equality of variances:';   
-       
     # Perform an ANOVA using the abs. deviations as the DV:
-    $self->anova_indep($self->{'levene'});
-    # if ($self->{'p_value'} < .05) {print "Unequal variances by Levene Test\n"; $self->{'equal_variances'} = 0; } else {$self->{'equal_variances'} = 1;}
+    $self->anova_indep(data => $self->{'levene'});
 
     return $self;
+}
+
+#-----------------------------------------------------------------------        
+sub eta_squared {
+#-----------------------------------------------------------------------        
+    my ($self) = @_;
+    croak 'Need to run ANOVA to obtain requested statistic' if !defined $self->{'df_t'} || !defined $self->{'f_value'};
+    $self->{'eta_sq'} = ( $self->{'df_t'} * $self->{'f_value'} ) / ($self->{'df_t'} * $self->{'f_value'} + $self->{'df_e'} );
+    ##$ss_t / ( $ss_t / $ss_e );
+    return $self->{'eta_sq'};
+}
+
+#-----------------------------------------------------------------------        
+sub omega_squared {
+#-----------------------------------------------------------------------        
+    my ($self) = @_;
+    my $eta = $self->eta_squared();
+    my $a = $eta * ($self->{'df_t'} + $self->{'df_e'}) - $self->{'df_t'};
+    my $n;
+    foreach (keys %{$self->{'data'}}) {
+        $n += $self->{'data'}->{$_}->count;
+    } 
+    $self->{'omega_sq'} =  $a / ( $a + $n * ( 1 - $eta ) ); 
+    return $self->{'omega_sq'};
 }
 
 #-----------------------------------------------------------------------        
@@ -458,8 +480,8 @@ sub _check_counts {
         if (defined $count) {
             my $tmp_count = $data->{$_}->count;
             if ($tmp_count != $count) {
-                carp 'Number of observations per group need to be equal for repeated measures ANOVA';
-                return;
+                croak 'Number of observations per group need to be equal for repeated measures ANOVA';
+                ##return;
             }
             else {
                 $count = $tmp_count;
@@ -469,6 +491,7 @@ sub _check_counts {
             $count = $data->{$_}->count;
         }
     }
+    croak 'One observation per group can not be tested in ANOVA' if $count == 1;
     return $count;
 }
 
@@ -488,7 +511,7 @@ Statistics::ANOVA - Perform oneway analyses of variance
 
 =head1 SYNOPSIS
 
- use Statistics::ANOVA;
+ use Statistics::ANOVA 0.04;
  my $varo = Statistics::ANOVA->new();
 
  # Some data:
@@ -512,14 +535,14 @@ Statistics::ANOVA - Perform oneway analyses of variance
  $varo->comparisons_dep();
  # or:
  $varo->anova_friedman()->dump(title => 'Friedman test');
+ # or 
+ $varo->anova_friedman(f_equiv => 1)->dump(title => 'Friedman test');
 
 =head1 DESCRIPTION
 
 Performs oneway between groups and repeated measures ANOVAs, with estimates of proportion of variance acounted for (eta-squared) and effect-size (omega-squared), plus  pairwise comparisons by the relevant t-tests. Also performs equality of variances tests (O'Brien's, Levene's).
 
 =head1 METHODS
-
-Probabilities for all F-tests are computed using the C<fdtrc> function in the L<Math::Cephes|Math::Cephes> module, rather than the L<Statistics::Distributions|Statistics::Distributions> module, as the former appears to be more accurate for indicating higher-level significances than the latter.
 
 =head2 new
 
@@ -533,7 +556,7 @@ Create a new Statistics::ANOVA object
 
 I<Alias>: C<load_data>
 
-Accepts either (1) a single C<name =E<gt> value> pair of a sample name, and a list (referenced or not) of data; or (2) a hash reference of named array references of data. The data are loaded into the class object by name, within a hash called C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you could get at the data again, for instance, by going $varo->{'data'}->{'data1'}->get_data(). You can keep updating the data this way, without unloading earlier loads. The names of the data can be arbitrary.
+Accepts either (1) a single C<name =E<gt> value> pair of a sample name, and a list (referenced or not) of data; or (2) a hash reference of named array references of data. The data are loaded into the class object by name, within a hash called C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you could get at the data again, for instance, by going $varo->{'data'}->{'data1'}->get_data(). The names of the data can be arbitrary. Each call L<unload|unload>s any previous loads.
 
 Returns the Statistics::ANOVA object.
 
@@ -582,7 +605,11 @@ Performs a one-way repeated measures analysis of variance (sphericity assumed). 
 
 I<Alias>: friedman_test
 
-Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the associated p-value (area under the right-side, upper tail). There is now no defined 'f_value'. See some other module for performing nonparametric pairwise comparisons.
+Performs Friedman's nonparametric analysis of variance - for two or more dependent (matched, related) groups. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'chi_value'} gives the chi-square statistic from the Friedman test; and $varo->{'p_value'} gives the associated p-value (area under the right-side, upper tail). There is now no defined 'f_value'.
+
+Accepts, however, one argument: If I<f_equiv> => 1, then, instead of the chi_value, and p_value read off the chi-square distribution, you get the F-value equivalent, with the p-value read off the F-distribution.
+
+See some other module for performing nonparametric pairwise comparisons.
 
 =head2 obrien_test
 
@@ -634,11 +661,13 @@ None yet.
 
 =head1 SEE ALSO
 
-L<Math::Cephes|lib::Math::Cephes>
+L<Math::Cephes|lib::Math::Cephes> Probabilities for all F-tests are computed using the C<fdtrc> function in this, rather than the L<Statistics::Distributions|lib::Statistics::Distributions> module, as the former appears to be more accurate for indicating higher-level significances.
 
 =head1 BUGS/LIMITATIONS
 
-No computational bugs as yet identfied. Hopefully this will change, given usage over time. Optimisation of code welcomed.
+Computational bugs will hopefully be identified with usage over time.
+
+Optimisation welcomed.
 
 No adjustment for violations of sphericity in repeated measures ANOVA.
 
@@ -648,7 +677,7 @@ Print only of t-test results.
 
 =over 4
 
-=item v 0.03
+=item v 0.01
 
 June 2008: Initital release via PAUSE. 
 

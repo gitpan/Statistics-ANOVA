@@ -23,6 +23,8 @@
  $varo->comparisons_dep();
  # or:
  $varo->anova_friedman()->dump(title => 'Friedman test');
+ # or:
+ $varo->anova_friedman(f_equiv => 1)->dump(title => 'Friedman test');
  
  __END__
 
