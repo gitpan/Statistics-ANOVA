@@ -7,10 +7,9 @@ use Carp qw/croak/;
 use Statistics::Descriptive;
 use Algorithm::Combinatorics qw(combinations);
 use Math::Cephes qw(:dists);
-
 use vars qw($VERSION);
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 #-----------------------------------------------------------------------
 sub new {
@@ -64,7 +63,7 @@ sub unload {
 sub anova_indep {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
-    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
@@ -91,7 +90,7 @@ sub anova_indep {
      
         push @s, [$count, $mean]; # store for calculating between SS
     }
-    ##croak 'No within-groups for performing ANOVA' if ! $ss_e;
+
     if (!$ss_e || !$df_e) { croak 'No within-groups for performing ANOVA'; }
     # Calc. between groups SS:
     # 1st need the grand mean:
@@ -125,7 +124,7 @@ sub anova_indep {
 sub anova_dep {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
-    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
@@ -184,9 +183,6 @@ sub anova_dep {
     my $f_prob = fdtrc($df_t, $df_e, $f);
     ##my $f_prob = Statistics::Distributions::fprob($df_t, $df_e, $f);
     
-    ##print "Between Ss\t$ss_s\t$df_b\t$ms_b\n";
-    #print "Within Ss\n B\t$ss_t $df_t\t$ms_t\t$f\t$f_prob\n BS\t$ss_e\t$df_e\t$ms_e\n";
-    ##    $self->{'p_value'} = $self->{'p_precision'} ? sprintf('%.' . $self->{'p_precision'} . 'f', $f_prob) : $f_prob;
     $self->{'f_value'} = $f;
     $self->{'p_value'} = $f_prob;
     $self->{'df_t'} = $df_t;
@@ -203,7 +199,7 @@ sub anova_dep {
 sub anova_friedman {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
-    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
     
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
@@ -279,7 +275,7 @@ sub anova_friedman {
 sub obrien_test {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
-    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to an associative array for performing ANOVA';
+    my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
         
     my ($m, $v, $n, @r) = ();       
     $self->{'obrien'} = {};
@@ -511,7 +507,7 @@ Statistics::ANOVA - Perform oneway analyses of variance
 
 =head1 SYNOPSIS
 
- use Statistics::ANOVA 0.04;
+ use Statistics::ANOVA 0.05;
  my $varo = Statistics::ANOVA->new();
 
  # Some data:
@@ -660,6 +656,8 @@ None by default.
 None yet.
 
 =head1 SEE ALSO
+
+L<Statistics::FisherPitman|lib::Statistics::FisherPitman> For an alternative to independent groups ANOVA when the variances are unequal.
 
 L<Math::Cephes|lib::Math::Cephes> Probabilities for all F-tests are computed using the C<fdtrc> function in this, rather than the L<Statistics::Distributions|lib::Statistics::Distributions> module, as the former appears to be more accurate for indicating higher-level significances.
 
