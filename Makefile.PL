@@ -12,10 +12,11 @@ WriteMakefile(
                          Statistics::Distributions => 1.02,
                          Statistics::Descriptive => 2.6,
                          Math::Cephes => 0.43,
+                         Scalar::Util => 1.18,
                          },
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (
        ABSTRACT_FROM  => 'lib/Statistics/ANOVA.pm', # retrieve abstract from module
-       AUTHOR         => 'R. Garton <rgarton@cpan.org>') : ()
+       AUTHOR         => 'R. Garton <rgarton AT cpan DOT org>') : ()
       ),
 );

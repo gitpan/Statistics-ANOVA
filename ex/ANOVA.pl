@@ -1,5 +1,5 @@
  use strict;
- use Statistics::ANOVA 0.03;
+ use Statistics::ANOVA 0.06;
  my $varo = Statistics::ANOVA->new();
 
  # Some data:
@@ -15,7 +15,7 @@
  # If they are independent data, test equality of variances, difference between them, and means:
  $varo->obrien_test()->dump(title => 'O\'Brien\'s test of equality of variances');
  $varo->levene_test()->dump(title => 'Levene\'s test of equality of variances');
- $varo->anova_indep()->dump(title => 'Independent groups ANOVA', eta_squared => 1, omega_squared => 1);
+ $varo->anova_indep()->dump(title => 'Independent groups ANOVA', table => 1, string => 1, s_precision => 3, p_precision => 4, eta_squared => 1, omega_squared => 1);
  $varo->comparisons_indep();
 
  # or if they are repeated measures:
@@ -24,7 +24,7 @@
  # or:
  $varo->anova_friedman()->dump(title => 'Friedman test');
  # or:
- $varo->anova_friedman(f_equiv => 1)->dump(title => 'Friedman test');
+ $varo->anova_friedman(f_equiv => 1)->dump(title => 'Friedman test (F equiv)');
  
  __END__
 

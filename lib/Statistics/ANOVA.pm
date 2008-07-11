@@ -4,12 +4,13 @@ use 5.008008;
 use strict;
 use warnings;
 use Carp qw/croak/;
-use Statistics::Descriptive;
 use Algorithm::Combinatorics qw(combinations);
 use Math::Cephes qw(:dists);
+use Scalar::Util qw(looks_like_number);
+use Statistics::Descriptive;
 use vars qw($VERSION);
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 #-----------------------------------------------------------------------
 sub new {
@@ -39,7 +40,8 @@ sub add {
       while (my ($sample_name, $sample_data) = each %{$_[0]}) {
          if (ref $sample_data) {
               $self->{'data'}->{$sample_name} = Statistics::Descriptive::Full->new();
-              $self->{'data'}->{$sample_name}->add_data(@{$sample_data});
+              my $dat = $self->_purge($sample_data);
+              $self->{'data'}->{$sample_name}->add_data($dat);
          } 
       }
     }
@@ -47,7 +49,8 @@ sub add {
        my $sample_name = shift;
        my $sample_data = ref $_[0] eq 'ARRAY' ? $_[0] : scalar (@_) ? \@_ : croak 'No list of data';
        $self->{'data'}->{$sample_name} = Statistics::Descriptive::Full->new();
-       $self->{'data'}->{$sample_name}->add_data(@{$sample_data});
+       my $dat = $self->_purge($sample_data);
+       $self->{'data'}->{$sample_name}->add_data($dat);
     }
 }
 
@@ -66,40 +69,32 @@ sub anova_indep {
     my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
     
     my $k = scalar(keys(%data));
-    if (! $k  || $k == 1) {
-        croak 'Not enough groups, if any, in the data for performing ANOVA';
-    }
+    croak 'Not enough groups, if any, in the data for performing ANOVA' if ! $k  || $k == 1;
         
-    my ($ss_t, $df_e, $ss_e, $means, @s, @dat, $mean, $count) = ();
-
+    my ($ss_t, $df_e, $ss_e, $sum_means, @s, @dat, $mean, $count) = ();
+    my $all = Statistics::Descriptive::Sparse->new();
     foreach (keys %data) {
         @dat = $data{$_}->get_data;
         $mean = $data{$_}->mean;
         $count = $data{$_}->count;
-        croak 'Empty data sent to ANOVA' if !defined $mean || !defined $count;
+        $all->add_data(@dat);
+        $sum_means += $mean;
 
-        $means += $mean;
-
-        # Accumulate within-groups SS, and df:
-        foreach (@dat) {
-            croak 'Empty data sent to ANOVA' if !defined $_;
-            $ss_e += ($_ - $mean)**2;
-        }
-
+        # accumulate within-groups SS, and df:
+        $ss_e += ($_ - $mean)**2 foreach @dat; 
         $df_e += ($count - 1);
-     
-        push @s, [$count, $mean]; # store for calculating between SS
+
+        push @s, [$count, $mean]; # for calculating between SS
+    }
+    croak 'No within-groups for performing ANOVA' if !$ss_e || !$df_e;
+
+    # Calc. between groups SS:     # 1st need grand mean:
+    my $grand_mean = $all->mean();
+    foreach (@s) { # - arefs of counts and means per group
+        $ss_t += $_->[0] * ($_->[1] - $grand_mean)**2; # M&D Eq. 57
     }
 
-    if (!$ss_e || !$df_e) { croak 'No within-groups for performing ANOVA'; }
-    # Calc. between groups SS:
-    # 1st need the grand mean:
-    my $grand_mean = $means / $k;
-    foreach (@s) {
-        $ss_t += $_->[0] * ($_->[1] - $grand_mean)**2;
-    }
-
-    # Calc F, and assoc'd probability:
+    # Calc F & prob:
     my $df_t = $k - 1;
     my $ms_t = $ss_t / $df_t;
     my $ms_e = $ss_e / $df_e;
@@ -125,7 +120,7 @@ sub anova_dep {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
     my %data = ref $args{'data'} eq 'HASH' ? %{$args{'data'}} : ref $self->{'data'} eq 'HASH' ? %{$self->{'data'}} : croak 'No reference to a hash of data for performing ANOVA';
-    
+
     my $k = scalar(keys(%data));
     if (! $k  || $k == 1) {
         croak 'Not enough groups, if any, in the data for performing ANOVA';
@@ -134,30 +129,32 @@ sub anova_dep {
 
     # Check counts:
     my $count = _check_counts(\%data);
-    
-    my ($i, $means, @s, @dat, $mean, @p_means, %p_data) = ();
-    
+    #my $all = Statistics::Descriptive::Sparse->new();
+
+    my ($i, $grand_mean, @i_means, %i_data) = ();
+
     for ($i = 0; $i < $count; $i++) {
-        $p_data{$i} = Statistics::Descriptive::Full->new();
+        $i_data{$i} = Statistics::Descriptive::Full->new();
         foreach (keys %data) {
-            $p_data{$i}->add_data( ($data{$_}->get_data)[$i] );
+            #$all->add_data(($data{$_}->get_data)[$i]);
+            $i_data{$i}->add_data( ($data{$_}->get_data)[$i] );
         }
-        $p_means[$i] = $p_data{$i}->mean();
+        $i_means[$i] = $i_data{$i}->mean();
     }
-    
-    my $grand_mean;
-    $grand_mean += $_ foreach @p_means;     
-    $grand_mean /= scalar(@p_means);
+
+    $grand_mean += $_ foreach @i_means;     
+    $grand_mean /= scalar(@i_means);
+    #$grand_mean = $all->mean(); # rely on above as s/be equal obs per gp
 
     # Between groups variance:
     ##my $ss_s;
-    #foreach (@p_means) {
+    #foreach (@i_means) {
     #    $ss_s += ( $_ - $grand_mean)**2;
     #}
     #$ss_s *= $k;
     my $df_b = ( $count - 1);
     #my $ms_b = $ss_s / $df_b;
-    
+
     my $ss_t;
     my %j_means = ();
     foreach (keys %data) {
@@ -167,22 +164,22 @@ sub anova_dep {
     $ss_t *= $count;
     my $df_t = ($k - 1);
     my $ms_t = $ss_t / $df_t;
-    
+
     my $ss_e;
     foreach (keys %data) {
         for ($i = 0; $i < $count; $i++) {
             my $o = ($data{$_}->get_data)[$i];
-            $ss_e += ($o - $p_means[$i] - $j_means{$_} + $grand_mean)**2;
+            $ss_e += ($o - $i_means[$i] - $j_means{$_} + $grand_mean)**2;
         }
     }
 
     my $df_e = $df_t * $df_b;
     my $ms_e = $ss_e / $df_e;
-    
+
     my $f = $ms_t / $ms_e;    
     my $f_prob = fdtrc($df_t, $df_e, $f);
     ##my $f_prob = Statistics::Distributions::fprob($df_t, $df_e, $f);
-    
+
     $self->{'f_value'} = $f;
     $self->{'p_value'} = $f_prob;
     $self->{'df_t'} = $df_t;
@@ -222,16 +219,16 @@ sub anova_friedman {
         push @{ $row_values{ ($data{$_}->get_data)[$i] } }, $_ foreach keys %data;
         # This loop adapted from Gene Boggs' "rank" function in Statistics-RankCorrelation:
         for my $x (sort { $a <=> $b } keys %row_values) {
-            # Get the number of ties.
+            # Get the number of ties:
             my $ties = scalar(@{ $row_values{$x} });
             $cur += $ties;
             if ($ties > 1) {
-                # Average the tied data.
+                # Average the tied data:
                 my $average = $old + ($ties + 1) / 2;
                 $ranks{$_} += $average for @{ $row_values{$x} };
             }
             else {
-                # Add the single rank to the list of ranks.
+                # Add the single rank to the list of ranks:
                 $ranks{ $row_values{$x}[0] } += $cur;
             }
             $old = $cur;
@@ -407,7 +404,7 @@ sub comparisons_indep {
         $p_value .= $args{'flag'} ? $p_value < $alpha ? ' *' : '' : '';
         print 't(', $ttest->df, ') = ', $ttest->t_statistic, ' ', $p_str, ' = ', $p_value, "\n";
     }
-    print "Bonferroni-adjusted alpha = $alpha\n";
+    print "Adjusted alpha = $alpha\n";
 }
 
 #-----------------------------------------------------------------------        
@@ -437,7 +434,7 @@ sub comparisons_dep {
         #$p_value = 1 if $p_value > 1;
         print "t($deg_freedom) = $t_value, $p_str = $p_value\n";
     }
-    print "Bonferroni-adjusted alpha = $alpha\n";
+    print "Adjusted alpha = $alpha\n";
 }
 
 #-----------------------------------------------------------------------        
@@ -445,15 +442,21 @@ sub string {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
     my $str;
+    my $p = $args{'p_precision'} ? sprintf('%.' . $args{'p_precision'} . 'f', $self->{'p_value'}) : $self->{'p_value'};
+    my $s_precision = $args{'s_precision'} || 3;
     if (defined $self->{'f_value'} && !$self->{'nparam'}) {
-        $str = "F($self->{'df_t'}, $self->{'df_e'}) = $self->{'f_value'}, p = $self->{'p_value'},";
-        $str .= ' MSe = ' . $self->{'ms_e'} . ',' if $args{'mse'};
-        $str .= ' eta-squared = ' . $self->eta_squared() . ',' if $args{'eta_squared'};
-        $str .= ' omega-squared = ' . $self->omega_squared() . ',' if $args{'omega_squared'};
+        $str .= "F($self->{'df_t'}, $self->{'df_e'}) = ";
+        $str .= sprintf('%.' . $s_precision . 'f', $self->{'f_value'});
+        $str .= ", p = $p,";
+        $str .= ' MSe = ' . sprintf('%.' . $s_precision . 'f', $self->{'ms_e'}) . ',' if $args{'mse'};
+        $str .= ' eta^2 = ' . sprintf('%.' . $s_precision . 'f', $self->eta_squared()) . ',' if $args{'eta_squared'};
+        $str .= ' omega^2 = ' . sprintf('%.' . $s_precision . 'f', $self->omega_squared()) . ',' if $args{'omega_squared'};
         chop($str);
     }
     elsif (defined $self->{'chi_value'}) {
-        $str = "chi^2($self->{'df_t'}) = $self->{'chi_value'}, p = $self->{'p_value'}";
+        $str .= "chi^2($self->{'df_t'}) = ";
+        $str .= sprintf('%.' . $s_precision . 'f', $self->{'chi_value'});
+        $str .= ", p = $p";
     }
     else {
         croak 'Need to run ANOVA to obtain results string'
@@ -462,12 +465,45 @@ sub string {
 }
 
 #-----------------------------------------------------------------------        
+sub table {
+#-----------------------------------------------------------------------        
+    my ($self, %args) = @_;
+    my $tbl;
+    my $p = $args{'p_precision'} ? sprintf('%.' . $args{'p_precision'} . 'f', $self->{'p_value'}) : $self->{'p_value'};
+    my $s_precision = $args{'s_precision'} || 3;
+    # F-table:
+    if (defined $self->{'f_value'} && !$self->{'nparam'}) {
+        $tbl .= "\t$_" foreach ('Df', 'Sum Sq', 'Mean Sq', 'F value', 'Pr(>F)');
+        $tbl .=  "\n";
+        $tbl .=  "$_\t" foreach ('Factor', $self->{'df_t'}); 
+        $tbl .= sprintf('%.' . $s_precision . 'f', $_) . "\t" foreach ($self->{'ss_t'}, $self->{'ms_t'}, $self->{'f_value'});
+        $tbl .= $p;
+        $tbl .=  "\n";
+        $tbl .=  "$_\t" foreach ('Error', $self->{'df_e'}); 
+        $tbl .= sprintf('%.' . $s_precision . 'f', $_) . "\t" foreach ($self->{'ss_e'}, $self->{'ms_e'});
+        $tbl .=  "\n";
+    }
+   
+    return $tbl;
+}
+
+#-----------------------------------------------------------------------        
 sub dump {
 #-----------------------------------------------------------------------        
     my ($self, %args) = @_;
     print "$args{'title'}\n" if $args{'title'};
-    print $self->string(%args), "\n";
+    if ($args{'table'}) {
+        print $self->table(%args);
+        print $self->string(%args), "\n" if $args{'string'};
+    }
+    else {
+        print $self->string(%args), "\n";
+    }
+    print "Observations purged as undefined or not-a-number: ". $self->{'purged'} . "\n" if $self->{'purged'} && $args{'verbose'};
 }
+
+#-----------
+# private functions - do drop in
 
 sub _check_counts {
     my $data = shift;
@@ -491,6 +527,14 @@ sub _check_counts {
     return $count;
 }
 
+sub _purge {
+   my ($self, $dat) = @_;
+   my @true = grep { looks_like_number($_) } @{$dat};
+   $self->{'purged'} += ( scalar(@{$dat}) - scalar(@true) );
+   croak "Empty data sent to ANOVA" if !scalar(@true);
+   return \@true;
+}
+
 # Aliases:
 *load_data = \&load;
 *add_data = \&add;
@@ -507,17 +551,17 @@ Statistics::ANOVA - Perform oneway analyses of variance
 
 =head1 SYNOPSIS
 
- use Statistics::ANOVA 0.05;
+ use Statistics::ANOVA 0.06;
  my $varo = Statistics::ANOVA->new();
 
  # Some data:
  my @gp1 = (qw/8 7 11 14 9/);
  my @gp2 = (qw/11 9 8 11 13/);
- my @gp3 = (qw/7 13 12 8 10/);
 
  # Load the data (names can be arbitrary):
  $varo->load_data({gp1 => \@gp1, gp2 => \@gp2});
- # Oh, forgot one:
+ # Oh, here comes another one:
+ my @gp3 = (qw/7 13 12 8 10/);
  $varo->add_data(gp3 => \@gp3);
 
  # If they are independent data, test equality of variances, difference between them, and means:
@@ -552,7 +596,11 @@ Create a new Statistics::ANOVA object
 
 I<Alias>: C<load_data>
 
-Accepts either (1) a single C<name =E<gt> value> pair of a sample name, and a list (referenced or not) of data; or (2) a hash reference of named array references of data. The data are loaded into the class object by name, within a hash called C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you could get at the data again, for instance, by going $varo->{'data'}->{'data1'}->get_data(). The names of the data can be arbitrary. Each call L<unload|unload>s any previous loads.
+Accepts either (1) a single C<name =E<gt> value> pair of a sample name, and a list (referenced or not) of data; or (2) a hash reference of named array references of data. The data are loaded into the class object by name, within a hash named C<data>, as L<Statistics::Descriptive::Full|Statistics::Descriptive> objects. So you can easily get at any descriptives for the groups you've loaded - e.g., $varo->{'data'}->{'aname'}->mean() - or you could get at the data again by going $varo->{'data'}->{'aname'}->get_data(); and so on. The names of the data are up to you.
+
+I<Missing/Invalid values>: Any observations that are undefined or not-a-number are purged prior to being shunted off to L<Statistics::Descriptive::Full|Statistics::Descriptive> (which does not handle missing or invalid values itself). The number of such purged values are cached thus: $varo->{'purged'}. The L<dump|dump> method can also reveal this value. The C<looks_like_number> method in L<Scalar::Util|Scalar::Util/looks_like_number> is used for this purpose.
+
+Each call L<unload|unload>s any previous loads.
 
 Returns the Statistics::ANOVA object.
 
@@ -609,11 +657,15 @@ See some other module for performing nonparametric pairwise comparisons.
 
 =head2 obrien_test
 
-Performs O'Brien's Test for equality of variances. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for O'Brien's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for O'Brien's Test.
+Performs O'Brien's (1981) test for equality of variances within each group: based on transforming each observation in relation to its group variance and its deviation from its group mean; and performing an ANOVA on these transformed scores (for which the group mean is equal to the variance of the original observations). The procedure is recognised to be robust against violations of normality (unlike F-max).
+
+The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for O'Brien's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for O'Brien's Test.
 
 =head2 levene_test
 
-Performs Levene's (1960) Test for equality of variances. The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Levene's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Levene's Test.
+Performs Levene's (1960) test for equality of variances within each group: an ANOVA of the absolute deviations, i.e., absolute value of each observation less its group mean.
+
+The statistical attributes now within the class object (see L<anova_indep|anova_indep>) pertain to this test, e.g., $varo->{'f_value'} gives the F-statistic for Levene's Test; and $varo->{'p_value'} gives the p-value associated with the F-statistic for Levene's Test.
 
 =head2 comparisons_indep
 
@@ -637,29 +689,41 @@ Returns the effect size statistic omega-squared if an ANOVA has been performed; 
 
 =head2 string
 
- $str = $varo->string(mse => 1, eta_squared => 1, omega_squared => 1)
+ $str = $varo->string(mse => 1, eta_squared => 1, omega_squared => 1, p_precision => integer, s_precision => integer)
 
-Returns a statement of result, in the form of C<F(df_t, df_e) = f_value, p = p_value>; or, for Friedman test C<chi^2(df_t) = chi_value, p = p_value>. Optionally also get MSe, eta_squared and omega_squared values appended to the string, where relevant.
+Returns a statement of result, in the form of C<F(df_t, df_e) = f_value, p = p_value>; or, for Friedman test C<chi^2(df_t) = chi_value, p = p_value> (to the value of I<p_precision>, if any). Optionally also get MSe, eta_squared and omega_squared values appended to the string, where relevant. These and the test statistic are "sprintf"'d to the I<s_precision> specified (default = 3).
+
+=head2 table
+
+ $tble = $varo->table(p_precision => integer, s_precision => integer);
+
+Returns a table listing the degrees of freedom, sums of squares, and mean squares for the tested "factor" and "error" (between/within groups), and the F and p values. The test statistics are "sprintf"'d to the I<s_precision> specified (default = 3); the p value's precision can be specified by I<p_precision>.
+
+Formatting with right-justification where appropriate is left as an exercise for the user.
 
 =head2 dump
 
- $varo->dump(mse => 1, eta_squared => 1, omega_squared => 1, title => 'ANOVA test')
+ $varo->dump(title => 'ANOVA test', p_precision => integer, s_precision => integer, mse => 1, eta_squared => 1, omega_squared => 1, verbose => 1)
 
-Prints the string returned by L<string|string>. Optionally also get MSe, eta_squared and omega_squared values appended to the string. A newline - "\n" - is appended at the end of the print. Above this string, a title can also be printed, by giving a value to the optional C<title> attribute.
+Prints the string returned by L<string|string>, or, if specified with the attribute I<table> => 1, the table returned by L<table|table>; and the string as well if I<string> => 1. A newline - "\n" - is appended at the end of the print of the string. Above this string or table, a title can also be printed, by giving a value to the optional C<title> attribute.
 
-=head1 EXPORT
-
-None by default.
+If I<verbose> => 1, then any curiosities arising in the calculations are noted at the end of other dumps. At the moment, this is only the number of observations that might have been purged were they identified as undefined or not-a-number upon loading/adding.
 
 =head1 REFERENCES
 
-None yet.
+Gardner, R. C. (2001). I<Psychological Statistics using SPSS for Windows>. Upper Saddle River, NJ, US: Prentice Hall. : An interesting source for open-source.
+
+Maxwell, S. E., & Delaney, H. D. (1990). I<Designing Experiments and Analyzing Data: A Model Comparison Perspective.> Belmont, CA, US: Wadsworth.
 
 =head1 SEE ALSO
 
 L<Statistics::FisherPitman|lib::Statistics::FisherPitman> For an alternative to independent groups ANOVA when the variances are unequal.
 
-L<Math::Cephes|lib::Math::Cephes> Probabilities for all F-tests are computed using the C<fdtrc> function in this, rather than the L<Statistics::Distributions|lib::Statistics::Distributions> module, as the former appears to be more accurate for indicating higher-level significances.
+L<Math::Cephes|lib::Math::Cephes> Probabilities for all F-tests are computed using the C<fdtrc> function in this, rather than the more commonly used L<Statistics::Distributions|lib::Statistics::Distributions> module, as the former appears to be more accurate for higher values of F.
+
+L<Statistics::Descriptive|Statistics::Descriptive> Fundamental calculations of means and variances are left up to this old standard; any limitations/idiosyncrasies therein are naturally passed onto the present one; although the present one purges missing and non-numerical values, unlike Statistics::Descriptive.
+
+L<Statistics::Table::F|Statistics::Table::F> Simply returns an F value. Note that it does not handle missing values, treating them as zero and thus returning an erroneous F-value in these cases.
 
 =head1 BUGS/LIMITATIONS
 
@@ -679,20 +743,19 @@ Print only of t-test results.
 
 June 2008: Initital release via PAUSE. 
 
-See CHANGES in installation distribution for subsequent updates.
-
 =back
+
+See CHANGES in installation distribution for subsequent updates.
 
 =head1 AUTHOR/LICENSE
 
 =over 4
 
-=item Copyright (c) 2008 Roderick Garton
+=item Copyright (c) 2006-2008 Roderick Garton
 
-rgarton@utas_DOT_edu_DOT_au
+rgarton AT cpan DOT org
 
-This program is free software. It may may be modified, used, copied, and redistributed at your own risk, and under the terms of the Perl Artistic License (see L<http://www.perl.com/perl/misc/Artistic.html>).
-Publicly redistributed modified versions must use a different name.
+This program is free software. This module is free software. It may be used, redistributed and/or modified under the stame terms as Perl-5.6.1 (or later) (see L<http://www.perl.com/perl/misc/Artistic.html>).
 
 =item Disclaimer
 
