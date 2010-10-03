@@ -1,0 +1,23 @@
+Build.PL
+Changes
+MANIFEST
+META.yml # Will be created by "make dist"
+Makefile.PL
+README
+lib/Statistics/ANOVA.pm
+t/00-load.t
+t/pod-coverage.t
+t/pod.t
+t/synopsis.t
+t/ref_indep_dfree_cat.t
+t/ref_indep_dfree_cat_cls.t
+t/ref_indep_dfree_cat_cmp.t
+t/ref_indep_dfree_ord.t
+t/ref_indep_param_cat.t
+t/ref_indep_param_cat_cls.t
+t/ref_indep_param_cat_cmp.t
+t/ref_indep_param_ord.t
+t/ref_rmdep_dfree_cat.t
+t/ref_rmdep_dfree_ord.t
+t/ref_rmdep_param_cat.t
+t/ref_rmdep_param_cat_cmp.t

@@ -1,0 +1,36 @@
+Statistics-ANOVA version 0.07
+================================
+
+Performs oneway between groups and repeated measures ANOVAs, with estimates of proportion of variance acounted for (eta-squared) and effect-size (omega-squared), plus  pairwise comparisons by the relevant t-tests. Also performs equality of variances tests (O'Brien's, Levene's).
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules:
+
+  Statistics::TTest => 1.1,
+  Statistics::DependantTTest => 0.03,
+  Statistics::Distributions => 1.02,
+  Statistics::Descriptive => 2.6,
+  Algorithm::Combinatorics => 0.23,
+  Math::Cephes => 0.43,
+
+COPYRIGHT AND LICENCE
+
+Put the correct copyright and licence information here.
+
+Copyright (C) 2008-2009 by R. Garton
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
+
+
