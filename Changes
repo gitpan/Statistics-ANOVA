@@ -1,5 +1,9 @@
 Revision history for Perl extension Statistics::ANOVA.
 
+0.08 2011/04/19
+	-new: confidence intervals computed using pooled estimate of variability over groups (as in calculating MS-within for the ANOVA).
+	-correction: paired comparison t-tests following-up the RM ANOVA (called by $aov->compare(independent => 0, parametric => 1)) were not working - thanks to Patrick H. Degnan, Yale, for bringing this to my attention. 
+
 0.07 2010/10/03 ** Important: Several changes that make this version incompatible with v0.062:
 	 -new: generic anova() and compare() methods
 	-new: independent groups non-parametric method (Kruskal-Wallis), handling ties
@@ -22,13 +26,13 @@ Revision history for Perl extension Statistics::ANOVA.
 
 0.06x 2008/07/11 - 2009/03/13
 	-further work on appropriate handling of missing values and NaNs.
-    -generalised grand_total calculation within anova_indep which was appropriate only if equal number of observations per group: thanks to Cathal Seoghie for feedback that led to identifying this limitation
-    -handling "missing values": added checking and purging of elements that are undefined or NaN before loading; this also reduces the later checks and possible croaks
-    -added sub "table" for returning/printing a table of dfs, sums-squares, etc.; pretty formatting still needed ...
+	-generalised grand_total calculation within anova_indep which was appropriate only if equal number of observations per group: thanks to Cathal Seoghie for feedback that led to identifying this limitation
+    	-handling "missing values": added checking and purging of elements that are undefined or NaN before loading; this also reduces the later checks and possible croaks
+    	-added sub "table" for returning/printing a table of dfs, sums-squares, etc.; pretty formatting still needed ...
 
 0.02-0.05 2008/06/26: 
-    -added sub "add_data" for non-deleting loads; all calls to load unload
-    -all carps now croak
+    	-added sub "add_data" for non-deleting loads; all calls to load unload
+    	-all carps now croak
     -nonparam flag for ensuring Friedman test appropriately "dump"-ed
     -cleaned-up ranking operation in Friedman test to handle ties - thanks to Gene Boggs' Statistics-RankCorrelation
     -added F-equivalent output option for Friedman test - thanks to "R" docs

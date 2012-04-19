@@ -34,7 +34,7 @@ my %ref_vals = (
 eval {$aov->load_data({ 1 => \@w1, 2 => \@w2, 3 => \@w3, 4 => \@w4, 5 => \@w5, 6 => \@w6, 7 => \@w7 });};
 ok(!$@, $@);
 
-eval {$aov->anova(independent => 0, parametric => 1, ordinal =>0);};
+eval {$aov->anova(independent => 0, parametric => 1, ordinal => 0);};
 ok(!$@, $@);
 
 ok( about_equal($aov->{'_stat'}->{'df_b'}, $ref_vals{'df_b'}), "Dependent Parametric Categorical:df_b: $aov->{'_stat'}->{'df_b'} = $ref_vals{'df_b'}" );

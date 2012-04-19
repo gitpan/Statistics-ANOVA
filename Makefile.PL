@@ -19,5 +19,5 @@ WriteMakefile(
 	'Test::More' => '0.0',
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean               => { FILES => 'Statistics-ANOVA-0.07-*' },
+    clean               => { FILES => 'Statistics-ANOVA-0.08-*' },
 );

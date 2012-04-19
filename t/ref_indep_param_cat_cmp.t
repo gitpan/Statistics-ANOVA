@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 9;
+use Test::More tests => 11;
 use constant EPS => 1e-2;
 
 BEGIN { use_ok('Statistics::ANOVA') };
@@ -23,6 +23,7 @@ my %ref_vals = (
 	f_12 => .32,
     f_12_adj_e => .23,
     ms_w => 67.375,
+    t_12 => 0.448,
 );
 
 eval {
@@ -41,6 +42,12 @@ eval {$pair_dat = $aov->compare(independent => 1, parametric => 1, ordinal => 0,
 ok(!$@, $@);
 
 ok( about_equal($pair_dat->{"h1,h2"}->{'t_value'}, $ref_vals{'f_12'}), "F-test pair comparison (unadjusted denom.): g1,g2: $pair_dat->{'h1,h2'}->{'t_value'} = $ref_vals{'f_12'}" );
+
+# test the legacy offer of t-stat comparison:
+eval {$pair_dat = $aov->compare(independent => 1, parametric => 1, ordinal => 0, use_t => 1);};
+ok(!$@, $@);
+
+ok( about_equal($pair_dat->{"h1,h2"}->{'t_value'}, $ref_vals{'t_12'}), "t-test pair comparison: h1,h2: $pair_dat->{'h1,h2'}->{'t_value'} = $ref_vals{'t_12'}" );
 
 sub about_equal {
     return 1 if $_[0] + EPS > $_[1] and $_[0] - EPS < $_[1];

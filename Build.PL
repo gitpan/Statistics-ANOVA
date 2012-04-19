@@ -17,7 +17,7 @@ my $builder = Module::Build->new(
       'Statistics::TTest' => '1.1',
       'Test::More' => '0.0',
     },
-    add_to_cleanup      => [ 'Statistics-ANOVA-0.07-*' ],
+    add_to_cleanup      => [ 'Statistics-ANOVA-0.08-*' ],
 );
 
 $builder->create_build_script();

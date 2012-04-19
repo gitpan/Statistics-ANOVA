@@ -1,4 +1,4 @@
-Statistics-ANOVA version 0.07
+Statistics-ANOVA version 0.08
 ================================
 
 Performs oneway between groups and repeated measures ANOVAs, with estimates of proportion of variance acounted for (eta-squared) and effect-size (omega-squared), plus  pairwise comparisons by the relevant t-tests. Also performs equality of variances tests (O'Brien's, Levene's).

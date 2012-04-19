@@ -1,12 +1,7 @@
 ---
-name: Statistics-ANOVA
-version: 0.07
+abstract: 'Parametric and nonparametric 1-way analyses of variance for means-comparison and clustering per differences/trends over independent or repeated measures of groups or levels'
 author:
   - 'Roderick Garton <rgarton@cpan.org>'
-abstract: Parametric/nonparametric 1-way analyses of variance for means-comparisons and clusterings per differences/trends over independent or repeated measures of groups/levels
-license: perl
-resources:
-  license: http://dev.perl.org/licenses/
 build_requires:
   Algorithm::Combinatorics: 0.23
   Math::Cephes: 0.43
@@ -17,12 +12,17 @@ build_requires:
   Statistics::TTest: 1.1
   Test::More: 0.0
 configure_requires:
-  Module::Build: 0.340201
-provides:
-  Statistics::ANOVA:
-    file: lib/Statistics/ANOVA.pm
-    version: 0.07
-generated_by: Module::Build version 0.340201
+  Module::Build: 0.36
+generated_by: 'Module::Build version 0.3607'
+license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
+name: Statistics-ANOVA
+provides:
+  Statistics::ANOVA:
+    file: lib/Statistics/ANOVA.pm
+    version: 0.08
+resources:
+  license: http://dev.perl.org/licenses/
+version: 0.08

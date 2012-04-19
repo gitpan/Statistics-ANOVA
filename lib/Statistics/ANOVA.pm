@@ -11,15 +11,19 @@ use Scalar::Util qw(looks_like_number);
 use Statistics::Descriptive;
 use Statistics::Lite qw(mean sum max min);
 use vars qw($VERSION);
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 =head1 NAME
 
-Statistics::ANOVA - Parametric/nonparametric 1-way analyses of variance for means-comparisons and clusterings per differences/trends over independent or repeated measures of groups/levels
+Statistics::ANOVA - Parametric and nonparametric 1-way analyses of variance for means-comparison and clustering per differences/trends over independent or repeated measures of groups or levels
+
+=head1 VERSION
+
+This is documentation for B<Version 0.08> of Statistics::ANOVA.
 
 =head1 SYNOPSIS
 
- use Statistics::ANOVA 0.07;
+ use Statistics::ANOVA 0.08;
  my $aov = Statistics::ANOVA->new();
 
  # Some data:
@@ -82,15 +86,11 @@ Statistics::ANOVA - Parametric/nonparametric 1-way analyses of variance for mean
 
 =head1 DESCRIPTION
 
-Perform oneway parametric and non-parametric analyses-of-variance (ANOVAs) for either nominal groups or ordinal levels (trend analysis), whether observations within each group/level are independent, or acquired by repeated measures. For the Fisher-esque ANOVAs, you're also offered estimates of proportion of variance accounted for (I<eta>-squared) and effect-size (I<omega>-squared), plus I<a priori> pairwise comparisons by the relevant independent or dependent I<t>-tests. Non-Fisher-esque, non-parametric tests comprise the Kruskal-Wallis, Friedman and Page tests, all with default accounting for ties in the calculation of ranks, and the standardizing of the test-statistics. Simple parametric and non-parametric I<post hoc> clustering is also offered (Scott-Knott and Worsley methods). The module also provides for testing equality of variances (O'Brien and Levene tests).
+By setting the extended Boolean (0, 1 or -1) value of only three parameters (C<independent>, C<parametric> and C<ordinal>), this module gives you oneway parametric or non-parametric analyses-of-variance (ANOVAs) for either nominal groups or ordinal levels (trend analysis), and for either independent or dependent (repeated measures) observations within each group/level. For the Fisher-esque ANOVAs, you can also access estimates of proportion of variance accounted for (I<eta>-squared) and effect-size (I<omega>-squared), plus I<a priori> pairwise comparisons by the relevant independent or dependent I<t>-tests. Non-Fisher-esque, non-parametric tests comprise the Kruskal-Wallis, Friedman and Page tests, all with default accounting for ties in the calculation of ranks, and standardizing of the test-statistics. Simple parametric and non-parametric I<post hoc> clustering is also offered (Scott-Knott and Worsley methods). The module also provides for testing equality of variances (O'Brien and Levene tests) across independent groups.
 
-A basic design principle has been to offer as few method calls as possible, and to steer queries into the proper underlying method by boolean manipulation of a minimal parameter set. The names of the key parameters are adjectival, and comprise: C<independent>, C<parametric> and C<ordinal>.
+A basic design principle has been to offer as few method calls as possible, and to steer queries into the proper underlying method by Boolean manipulation of a minimal parameter set. To get to any relevant test of your data, there are (only) three Boolean vars to set, and these are named adjectivally: C<independent>, C<parametric> and C<ordinal>. So the relevant tests are offered I<not> in the form of little packages specific to each test, but by specifying the attributes of the data: are they based on independent groups or repeated measures? do the groups/measures form independent categories or related levels? are relationships, likenesses or differences to be found? do the data support parametric testing? It seems more useful for programmed access to statistical algorithms to be initially sensitive to the answers to these and like questions, while keeping the methods of access and set of arguments the same across tests, and the actual tests relatively invisible, rather than bearing the statistical method up-front, each package offering a unique interface and algorithm for the same things, each dependent on a unique set of arguments and their correct norder. It could be argued that that's what an application should do, not a module. This module goes the other way, recognizing that the algorithms share arguments and internal methods, which is typically obscured by algorithm-specific packaging.
 
-That the algorithms here implemented are reliable has been assayed by testing each method with at least two examples from different published sources; and comparing the output with one or another open-source or commercial statistics package. The tests based on published examples are fully implemented during cpan-wise installation; see the "t" folder of L<cpan.org|www.cpan.org>'s installation-distribution of this module. News of unreliabilities are welcome; a fundamental one from Cathal Seoghie has already been acted upon, namely, pointing to the need to account for NaNs, empty, and invalid values.
-
-A guiding design principle has been to offer access to these statistical processes I<not> in the form of little packages specific to a particular test, but in the form of the type of decision that has to be made with respect to the form of the data: are they based on independent groups or repeated measures? do the groups/measures form independent categories or related levels? are relationships, likenesses or differences to be found? do the data support parametric testing? It seems more useful for programmed access to statistical algorithms to be initially sensitive to the answers to these and like questions, while keeping the methods of access and set of arguments the same across tests, and the actual tests relatively invisible, rather than bearing the statistical method up-front, each package offering a unique interface and algorithm, each dependent on a unique set of arguments. This approach isn't just the difference between implementing algorithms and writing an application, for this approach requires that the algorithms themselves be implemented with particular classifications, but also shared arguments and internal methods.
-
-The module has expanded over time to the extent that not all the omnibus tests here provided are strictly or best described as ANOVAs; "Oneway" would be an alternative name, but then repeated measures are, for some, "twoway" by default; "Omnibus" seems too godly, misses the few nuts and bolts on offer, and could also describe chi-squared contingency testing.
+Reliability has been assayed by testing each method with at least two different published sources; and comparing the output with one or another open-source or commercial statistics package. The tests based on published examples are implemented during cpan-wise installation; see the "t" folder of L<cpan.org|www.cpan.org>'s installation-distribution of this module. News of unreliabilities are welcome; a fundamental one from Cathal Seoghie has already helped, namely, by pointing to the need to account for NaNs, empty, and invalid values.
 
 =head1 METHODS
 
@@ -273,11 +273,11 @@ When C<independent> parameter equals 0 when sent to L<anova|anova>, L<compare|co
 
 The number of indices that were subject to purging is cached thus: $aov->{'purged'}. The L<dump|dump> method can also reveal this value. 
 
-The C<looks_like_number> method in L<Scalar::Util|Scalar::Util/looks_like_number> is used for checking validity of values. 
+The C<looks_like_number> method in L<Scalar::Util|Scalar::Util/looks_like_number> is used for checking validity of values. (Although Params::Classify::is_number might be stricter, looks_like_number benchmarks at least a few thousand %s faster.) 
 
 =cut
 
-=head2 OMNIBUS SIGNIFICANCE-TESTING by ANOVA et al.
+=head2 MEASURING SIGNIFICANCE
 
 One generic method L<anova|anova> (a.k.a. aov, test) is used to access parametric or nonparametric tests for independent or dependent/related observations, and categorical prediction or trend analysis. Accessing the different statistical tests depends on setting I<three> parameters on a true/false basis: I<independent>, I<parametric> and I<ordinal>. The following describes the particular tests you get upon each possible combination of these alternatives.
 
@@ -475,9 +475,9 @@ sub _aov_indep_dfree_ord {
 
  $aov->anova(independent => 0, parametric => 1, ordinal => 0, multivariate => 0|1)
 
-The parametric repeated measures analysis of variance is performed. By default, this is performed using the traditional univariate, or "mixed-model," approach, with sphericity assumed (i.e., equal variances of all treatment differences). The assumption is met when there are only two levels of the repeated measures factor; but unequal variances might be a problem when there are more than two levels. 
+The parametric repeated measures analysis of variance is performed. By default, this is performed using the traditional univariate, or "mixed-model," approach, with sphericity assumed (i.e., equal variances of all factor differences, within each factor and all possible pairs of factors). The assumption is met when there are only two levels of the repeated measures factor; but unequal variances might be a problem when there are more than two levels. 
 
-[TO DO: In order to account for the possibility of violated sphericity, two strategies are typically used: either adjustment of the degrees-of-freedom by one or another method (e.g., Huynh-Feldt procedure) or a multivariate analysis of variance. Presently, the module permits (only) the latter option, given that it can also be used in the next stage for comparing individual means (whereas adjustments of the degrees-of-freedom in paired comparisons is not recommended) (Maxwell & Delaney, 1992, Ch. 11). In order to perform a multivariate analysis of variance, simply specify the parameter C<multivariate> and give it a value of 1. Alternatively, call C<anova_mv>.  In fact, the multivariate approach is recommended as the default the procedure, which might be implemented in a future version.]
+[TO DO: In order to account for the possibility of violated sphericity, two strategies are typically used: either adjustment of the degrees-of-freedom by one or another method (e.g., Huynh-Feldt procedure) or a multivariate analysis of variance. Presently, the module permits (only) the latter option, given that it can also be used in the next stage for comparing individual means (whereas adjustments of the degrees-of-freedom in paired comparisons is not recommended) (Maxwell & Delaney, 1992, Ch. 11). In order to perform a multivariate analysis of variance, simply specify the parameter C<multivariate> and give it a value of 1. Alternatively, call C<anova_mv>.  In fact, the multivariate approach is recommended as the default procedure, which might be implemented in a future version.]
 
 =cut
 
@@ -638,7 +638,7 @@ sub _aov_rmdep_ord_dfree {
 
 I<Aliases>: aov, test
 
-Generic method to access all anova/omnibus functions by specifying TRUE/FALSE values for C<independent>, C<parametric> and C<ordinal>. 
+Generic method to access all anova functions by specifying TRUE/FALSE values for C<independent>, C<parametric> and C<ordinal>. 
 
     Independent    Parametric  Ordinal    What you get
     1              1           0          Fisher-esque independent groups ANOVA
@@ -867,17 +867,17 @@ sub omega_squared {
 
 The method performs all possible pairwise comparisons, with the Bonferroni approach to control experiment-wise error-rate. The particular tests depend on whether or not you want parametric (default) or nonparametric tests, and if the observations of the factor have been made between groups (default) or by repeated measures.
 
-[TO DO: Note: The following new procedures, as implemented from v0.07, is only relevant for independent designs; for repeated measures, the comparisons are, at this time, the same as provided in earlier versions, i.e., by multiple paired comparisons I<t>-tests.]
+[TO DO: Note: The following new procedures, as implemented from v0.07 onwards, are only relevant for independent designs; for repeated measures, the comparisons are, at this time, the same as provided in earlier versions, i.e., by multiple paired comparisons I<t>-tests.]
 
 B<Parametric pairwise comparison>. If C<parametric> =E<gt> 1 (default), performs I<F>-tests on each possible pair of observations, with respect to the value of C<independent>. Unless you have just run an equality of variances test, the omnibus equality-of-variances is first tested by the L<O'Brien method|obrien>; otherwise, the result of the last such test is looked up.
 
 =over
 
-=item 4
+=item
 
 I<If the variances are unequal> (I<p> E<lt> .05), the variance of each sample in the pair is used in the error-term of the I<F>-value, and the denominator degrees-of-freedom is adjusted accordingly. 
 
-=item 4
+=item
 
 I<If the variances are equal>, the mean-square error ($aov-E<gt>{'ms_w'}) is used in the denominator. 
 
@@ -930,7 +930,7 @@ sub compare {
                 my $ttest = new Statistics::TTest;
                 $cmp_fn = sub {
                     my $data_pairs = shift;
-                    $ttest->load_data([$data_pairs->[0]->[1]->get_data()], [$data_pairs->[1]->[1]->get_data]);
+                    $ttest->load_data([$data_pairs->[0]->[1]->get_data()], [$data_pairs->[1]->[1]->get_data()]);
                     $p_value = $ttest->{'t_prob'}; # returns the 2-tailed p_value
                     $p_value /= 2 if $args{'tails'} == 1;    
                     return ($ttest->t_statistic, $p_value, $ttest->df);
@@ -946,23 +946,7 @@ sub compare {
         ($data) = $self->_rmdep_data($args{'data'});
 
         if ($args{'parametric'}) {
- 
-            #if (!$args{'use_t'}) {# Can be univariate method or multivariate method:
-            #    $cmp_fn = \&_cmp_rmdep_param_cat;
-            #}
-            #else { # legacy offer:
-                require Statistics::DependantTTest;
-                my $ttest = new Statistics::DependantTTest; 
-                $cmp_fn = sub {
-                    my $data_pairs = shift;
-                    $ttest->load_data($data_pairs->[0]->[0], $data_pairs->[0]->[1]->get_data());
-                    $ttest->load_data($data_pairs->[1]->[0], $data_pairs->[1]->[1]->get_data());
-                    my ($s_value, $df) = $ttest->perform_t_test($data_pairs->[0]->[0], $pairs->[1]->[0]);
-                    $p_value = stdtr($df, -1 * abs($s_value)); # Math::Cephes fn # returns the left 1-tailed p_value
-                    $p_value *= 2 unless $args{'tails'} == 1;
-                    return ($s_value, $p_value, $df);
-                };
-            #}
+                $cmp_fn = \&_cmp_rmdep_param_cat;
         }
         else {
             carp 'Non-parametric multi-comparison procedure for dependent/repeated measures is not implemented';
@@ -974,38 +958,31 @@ sub compare {
     $alpha /= scalar(@all_pairs) if !$args{'adjust_p'}; # divide by number of comparisons
 
     # Compare each pair:
-    if (!$args{'independent'} && $args{'parametric'} && !$args{'use_t'}) { # repeated measures procedure that has its own loop
-        my $dataref = $cmp_fn->($data, \@all_pairs, %args);
-        #my $dataref = _cmp_rmdep_param_cat($data, \@all_pairs, %args);
-        # If strings or hash: ...
-    }
-    else {
-        foreach $pairs (@all_pairs) {
-            $pairs = [sort {$a cmp $b} @{$pairs}];
-            ($s_value, $p_value, $a3, $a4) = $cmp_fn->([ [$pairs->[0], $data->{$pairs->[0]}], [$pairs->[1], $data->{$pairs->[1]}] ], %args, eq_var => $eq_var, ms_w => $self->{'_stat'}->{'ms_w'});
-        
-            $p_value = _pcorrect($p_value, scalar(@all_pairs)) if $args{'adjust_p'};
-            $a3 = _precisioned($args{'precision_s'}, $a3); # degrees-of-freedom
-            $s_value = _precisioned($args{'precision_s'}, $s_value);
-            $p_value = _precisioned($args{'precision_p'}, $p_value);
-            $p_str = $args{'tails'} == 1 ? '1p' : '2p';
-            $flag = $p_value < $alpha ? 1 : 0;
-            $flag_str = $args{'flag'} ? $flag ? ' *' : '' : '';
-            if ($args{'parametric'}) {
-                $res{"$pairs->[0],$pairs->[1]"} = { t_value => $s_value, p_value => $p_value, df => $a3, flag => $flag};
-                push @strings,  "($pairs->[0] - $pairs->[1]), t($a3) = $s_value, $p_str = $p_value" . $flag_str;
-            }
-            else {
-                $res{"$pairs->[0],$pairs->[1]"} = { z_value => $s_value, p_value => $p_value, s_value => $a3, flag => $flag};
-                push @strings, "($pairs->[0] - $pairs->[1]), Z(W) = $s_value, $p_str = $p_value" . $flag_str;
-            }
-        } # end loop
-        
-        if ($args{'dump'}) {
-            print "$_\n" foreach @strings;
-            print "Alpha = $alpha\n";
+    foreach $pairs (@all_pairs) {
+        $pairs = [sort {$a cmp $b} @{$pairs}];
+        ($s_value, $p_value, $a3, $a4) = $cmp_fn->([ [$pairs->[0], $data->{$pairs->[0]}], [$pairs->[1], $data->{$pairs->[1]}] ], %args, eq_var => $eq_var, ms_w => $self->{'_stat'}->{'ms_w'});
+         $p_value = _pcorrect($p_value, scalar(@all_pairs)) if $args{'adjust_p'};
+         $a3 = _precisioned($args{'precision_s'}, $a3); # degrees-of-freedom
+         $s_value = _precisioned($args{'precision_s'}, $s_value);
+         $p_value = _precisioned($args{'precision_p'}, $p_value);
+         $p_str = $args{'tails'} == 1 ? '1p' : '2p';
+         $flag = $p_value < $alpha ? 1 : 0;
+         $flag_str = $args{'flag'} ? $flag ? ' *' : '' : '';
+         if ($args{'parametric'}) {
+             $res{"$pairs->[0],$pairs->[1]"} = { t_value => $s_value, p_value => $p_value, df => $a3, flag => $flag};
+             push @strings,  "($pairs->[0] - $pairs->[1]), t($a3) = $s_value, $p_str = $p_value" . $flag_str;
+         }
+         else {
+             $res{"$pairs->[0],$pairs->[1]"} = { z_value => $s_value, p_value => $p_value, s_value => $a3, flag => $flag};
+             push @strings, "($pairs->[0] - $pairs->[1]), Z(W) = $s_value, $p_str = $p_value" . $flag_str;
         }
-    }
+     } # end loop
+        
+     if ($args{'dump'}) {
+         print "$_\n" foreach @strings;
+         print "Alpha = $alpha\n";
+     }
+
     return $args{'str'} ? \@strings : \%res;
 }
 
@@ -1038,11 +1015,19 @@ sub _cmp_indep_param_cat {
      return ($f_value, $f_prob, 1, $df_w);
 }
 
-sub _cmp_rmdep_param_cat {
-    my ($data, $all_pairs, %args)= @_;
-    my ($i, $pairs, %diffs, @full_diffs, @null_diffs, @F_x_sum, @R_x_sum) = ();
-    my $plim = scalar(keys %{$data});##scalar(@{$all_pairs});
-	my $n;
+sub _cmp_rmdep_param_cat { # not completed - only use Dependant t-test for now:
+    my ($data_pairs, %args) = @_;
+    require Statistics::DependantTTest;
+    my $ttest = new Statistics::DependantTTest; 
+    $ttest->load_data($data_pairs->[0]->[0], $data_pairs->[0]->[1]->get_data());
+    $ttest->load_data($data_pairs->[1]->[0], $data_pairs->[1]->[1]->get_data());
+    my ($s_value, $df) = $ttest->perform_t_test($data_pairs->[0]->[0], $data_pairs->[1]->[0]);
+    my $p_value = stdtr($df, -1 * abs($s_value)); # Math::Cephes fn # gets the left 1-tailed p_value
+    $p_value *= 2 unless $args{'tails'} == 1;
+    return ($s_value, $p_value, $df);
+    #my ($i, $pairs, %diffs, @full_diffs, @null_diffs, @F_x_sum, @R_x_sum) = ();
+    #my $plim = scalar(keys %{$data});##scalar(@{$all_pairs});
+	#my $n;
 }
 
 
@@ -1152,21 +1137,83 @@ sub _is_significant {
 
 =head3 confidence
 
-[Not yet implemented]
+ $itv_str = $aov->(independent => 1|0, alpha => .05, name => 'aname', limits => 0) # get interval for single group as string
+ $lim_aref = $aov->(independent => 1|0, alpha => .05, name => 'aname', limits => 1) # get upper & lower limits for single group as aref
+ $itv_href = $aov->(independent => 1|0, alpha => .05, name => ['aname', 'bname'], limits => 0) # get interval for 2 groups as hashref keyed by group names
+ $lim_href = $aov->(independent => 1|0, alpha => .05, name => ['aname','bname'], limits => 1) # get upper & lower limits for 2 groups as hashref of group-named arefs
+ $itv_href = $aov->(independent => 1|0, alpha => .05, name => undef, limits => 0) # get intervals for all groups as hashref keyed by group names
+ $lim_href = $aov->(independent => 1|0, alpha => .05, name => undef, limits => 1) # upper & lower limits for all groups as hashref 
+
+Computes confidence intervals using (by default) the pooled estimate of variability over groups/levels, rather than the standard error within each group/level, as described by Masson and Loftus (2003). For a between groups design, the confidence interval (as usual) indicates that, at a certain level of probability, the true population mean is likely to be within the interval returned. For a within-subjects design, as any effect of the variability between subjects is eliminated, the confidence interval (alternatively) indicates the reliability of the how the sample means are distributed as an estimate of the how the population means are distributed.
+
+In either case, there is an assumption that the variances within each condition are the same between the conditions (homogeneity of variances assumption).
+
+Actual algorithm depends on whether the measures are obtained from seperate groups (independent => 1) or by repeated measures (independent => 0) (i.e., whether between-groups or within-groups design). Default is between-groups.
+
+The option C<use_mse> can be set to equal 0 so that the (typical) standard error of the mean is used in place of the mean-square error. This is one option to use when the variances are unequal.
+
+The option C<conditions> can, optionally, include a referenced array naming the particular conditions that should be included when calculating I<MSe>. By default, this is all the conditions, using I<MSe> from the omnibus ANOVA. This is one option to handle the case of unequal variances between conditions.
+
+Default 
 
 =cut
 
 sub confidence {
 #-----------------------------------------------
     my ($self, %args) = @_;
-    croak 'The <confidence> procedure is not yet implemented';
+    #croak 'The <confidence> procedure is not yet implemented';
     croak 'Need to run ANOVA to obtain requested statistic' if !defined $self->{'_stat'}->{'df_w'} || !defined $self->{'_stat'}->{'ms_w'};
-    my $data = $self->_purge_in_list($self->{'data'});# List-wise clean-up
-    ##my @all_pairs = combinations([keys(%{$data})], 2); # Algorithm::Combinatorics function
+
+    my $data = $self->_purge_in_list($self->{'data'});# List-wise clean-up    
+
+    # Init key params:
+    my $indep = defined $args{'independent'} ? $args{'independent'} : 1;
+    my $alpha = _init_alpha($args{'alpha'}); # default = .05
+    my $tcrit = abs(stdtri($self->{'_stat'}->{'df_w'}, $alpha/2));
+    my $limits = delete $args{'limits'} or 0;
+    my $use_mse = defined $args{'use_mse'} ? $args{'use_mse'} : 1;
+    my @names = defined $args{'name'} ? ref $args{'name'} ? @{$args{'name'}} : ($args{'name'}) : keys(%{$data});
+    my @conditions = ref $args{'conditions'} ? @{$args{'conditions'}} : @names;
+print "tcrit = $tcrit\n";
+    my ($erv, $itv, %confints) = ();
+    
+    foreach (@names) {
+        if ($use_mse) {
+            my $mse;
+            #if (ref $args{'conditions'}) {
+            #    print "cond n = ",scalar(@{$args{'conditions'}}), "\n";
+            #    print "cond g = ", scalar(keys(%{$data})), "\n";
+            # and scalar(@{$args{'conditions'}}) < scalar(keys(%{$data})) ) {
+                # get the mse for the particular comparison:
+            #    my $aov_i = Statistics::ANOVA->new();
+            #    $aov_i->add($_ => $data->{$_}->get_data) foreach @{$args{'conditions'}};
+            #    $mse = $aov_i->{'_stat'}->{'ms_w'};
+            #    print "mse by contrast = $mse\n";
+            #}
+            #else {
+                $mse = $self->{'_stat'}->{'ms_w'};
+            #    print "mse omni = $mse\n";
+            #}
+            $erv = sqrt( $mse / $data->{$_}->count );
+        }
+        else {
+            $erv = $data->{$_}->standard_deviation / sqrt($data->{$_}->count - 1);
+        }
+        $itv = $erv * $tcrit;
+        if ($limits) {
+            $confints{$_} = [$data->{$_}->mean - $itv, $data->{$_}->mean + $itv];
+        }
+        else {
+            $confints{$_} = $itv;
+        }
+    }
+        
+    return scalar(keys(%confints)) > 1 ? \%confints : $confints{$names[0]};
+    
     my $levels = scalar(keys(%{$data}));
     my $n_comp = $levels * ($levels - 1) / 2;
     print "ncomp = $n_comp\n";
-    my $alpha = $args{'alpha'} || .05;
+    
     $alpha /= $n_comp; # divide by number of comparisons
     my $f_val = fdtri(1, $self->{'_stat'}->{'df_w'}, (.05 / $n_comp ) ); # Math::Cephes fn
     my $w_var = sqrt($f_val);
@@ -1306,8 +1353,8 @@ sub _indep_data {
 sub _indep_ss_ord {
     my $data = shift;
     my @names = keys(%{$data});
-    croak "Check names for groups: All need to be numerical for trend analysis" if  grep { !looks_like_number($_)} @names;
-    # (Benchmark: about 50% faster to "my" the vars apiece rather than as a group beforehand:)
+    croak "Check names for groups: All need to be numerical for trend analysis" if grep { !looks_like_number($_)} @names;
+    # (Benchmark: about 50% faster to "my" the vars apiece rather than as a list to "my" beforehand:)
     my $mean_t = mean( @names );
     my $sum_sample_contrasts = sum( map { $data->{$_}->mean * ($_ - $mean_t) } @names );
     my $sum_squared_coeffs = sum( map { ($_ - $mean_t)**2 / $data->{$_}->count }  @names ); # unweighted
@@ -1564,6 +1611,21 @@ sub _precisioned {
     return $_[0] ? sprintf('%.' . $_[0] . 'f', $_[1]) : (defined $_[1] ? $_[1] : ''); # don't lose any zero
 }
 
+sub _init_alpha {
+    my $val = shift;
+    if (defined $val) {
+        if ($val > 0 && $val < 1) {
+            return $val;
+        }
+        else {
+            croak "Alpha value should be between 0 and 1, not '$val'."
+        }
+    }
+    else {
+        return .05;
+    }
+}
+
 1;
 
 __END__
@@ -1573,6 +1635,8 @@ __END__
 Hollander, M., & Wolfe, D. A. (1999). I<Nonparametric statistical methods>. New York, NY, US: Wiley.
 
 Levene, H. (1960). Robust tests for equality of variances. In I. Olkins (Ed.), I<Contributions to probability and statistics>. Stanford, CA, US: Stanford University Press.
+
+Masson, M. E. J., & Loftus, G. R. (2003). Using confidence intervals for graphically based data interpretation. I<Canadian Journal of Experimental Psychology>, I<57>, 203-220.
 
 Maxwell, S. E., & Delaney, H. D. (1990). I<Designing experiments and analyzing data: A model comparison perspective.> Belmont, CA, US: Wadsworth.
 
@@ -1622,7 +1686,7 @@ See CHANGES in installation distribution.
 
 =over 4
 
-=item Copyright (c) 2006-2009 Roderick Garton
+=item Copyright (c) 2006-2012 Roderick Garton
 
 rgarton AT cpan DOT org
 
